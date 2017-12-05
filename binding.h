@@ -2,10 +2,8 @@
 #ifndef BINDING_H_
 #define BINDING_H_
 
-#include <v8.h>
-#include <node.h>
-#include <node_buffer.h>
-#include <node_version.h>
+#include <napi.h>
+#include <uv.h>
 #include <string>
 #include "./node_defs.h"
 #include "./connection.h"
@@ -14,34 +12,36 @@
 #include "./query.h"
 
 namespace node_db {
-class Binding : public EventEmitter {
+  using namespace Napi;
+
+  class Binding : public EventEmitter {
     public:
         Connection* connection;
 
     protected:
         struct connect_request_t {
-            v8::Persistent<v8::Object> context;
+            ObjectReference context;
             Binding* binding;
             const char* error;
         };
-        v8::Persistent<v8::Function>* cbConnect;
+        FunctionReference cbConnect;
 
         Binding();
         ~Binding();
-        static void Init(v8::Handle<v8::Object> target, v8::Persistent<v8::FunctionTemplate> constructorTemplate);
-        static v8::Handle<v8::Value> Connect(const v8::Arguments& args);
-        static v8::Handle<v8::Value> Disconnect(const v8::Arguments& args);
-        static v8::Handle<v8::Value> IsConnected(const v8::Arguments& args);
-        static v8::Handle<v8::Value> Escape(const v8::Arguments& args);
-        static v8::Handle<v8::Value> Name(const v8::Arguments& args);
-        static v8::Handle<v8::Value> Query(const v8::Arguments& args);
+        static void Init(Object target, Napi::FunctionReference constructorTemplate);
+        static Napi::Value Connect(const CallbackInfo& args);
+        static Napi::Value Disconnect(const CallbackInfo& args);
+        static Napi::Value IsConnected(const CallbackInfo& args);
+        static Napi::Value Escape(const CallbackInfo& args);
+        static Napi::Value Name(const CallbackInfo& args);
+        static Napi::Value Query(const CallbackInfo& args);
 	static uv_async_t g_async;
         static void uvConnect(uv_work_t* uvRequest);
         static void uvConnectFinished(uv_work_t* uvRequest, int status);
         static void connect(connect_request_t* request);
         static void connectFinished(connect_request_t* request);
-        virtual v8::Handle<v8::Value> set(const v8::Local<v8::Object> options) = 0;
-        virtual v8::Persistent<v8::Object> createQuery() const = 0;
+        virtual Napi::Value set(const Napi::Object options) = 0;
+        virtual ObjectReference createQuery() const = 0;
 };
 }
 

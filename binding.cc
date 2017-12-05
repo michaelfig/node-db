@@ -1,18 +1,18 @@
 // Copyright 2011 Mariano Iglesias <mgiglesias@gmail.com>
 #include "./binding.h"
 
-node_db::Binding::Binding(): node_db::EventEmitter(), connection(NULL), cbConnect(NULL) {
+using namespace Napi;
+
+node_db::Binding::Binding(): node_db::EventEmitter(), connection(NULL) {
 }
 
 node_db::Binding::~Binding() {
-    if (this->cbConnect != NULL) {
-        node::cb_destroy(this->cbConnect);
-    }
+  this->cbConnect.Reset();
 }
 
 uv_async_t node_db::Binding::g_async;
 
-void node_db::Binding::Init(v8::Handle<v8::Object> target, v8::Persistent<v8::FunctionTemplate> constructorTemplate) {
+void node_db::Binding::Init(Object target, FunctionReference constructorTemplate) {
     NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_STRING, node_db::Result::Column::STRING);
     NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_BOOL, node_db::Result::Column::BOOL);
     NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_INT, node_db::Result::Column::INT);
@@ -32,10 +32,11 @@ void node_db::Binding::Init(v8::Handle<v8::Object> target, v8::Persistent<v8::Fu
     NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "query", Query);
 }
 
-v8::Handle<v8::Value> node_db::Binding::Connect(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::Connect(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+  EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+  node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
     bool async = true;
@@ -47,7 +48,7 @@ v8::Handle<v8::Value> node_db::Binding::Connect(const v8::Arguments& args) {
             ARG_CHECK_FUNCTION(1, callback);
             optionsIndex = 0;
             callbackIndex = 1;
-        } else if (args[0]->IsFunction()) {
+        } else if (args[0].IsFunction()) {
             ARG_CHECK_FUNCTION(0, callback);
             callbackIndex = 0;
         } else {
@@ -56,22 +57,22 @@ v8::Handle<v8::Value> node_db::Binding::Connect(const v8::Arguments& args) {
         }
 
         if (optionsIndex >= 0) {
-            v8::Local<v8::Object> options = args[optionsIndex]->ToObject();
+            Napi::Object options = args[optionsIndex].ToObject();
 
-            v8::Handle<v8::Value> set = binding->set(options);
+	    Napi::Value set = binding->set(options);
             if (!set.IsEmpty()) {
-                return scope.Close(set);
+                return scope.Escape(set);
             }
 
             ARG_CHECK_OBJECT_ATTR_OPTIONAL_BOOL(options, async);
 
-            if (options->Has(async_key) && options->Get(async_key)->IsFalse()) {
+            if (options.Has(async_key) && !options.Get(async_key).ToBoolean().Value()) {
                 async = false;
             }
         }
 
         if (callbackIndex >= 0) {
-            binding->cbConnect = node::cb_persist(args[callbackIndex]);
+	  binding->cbConnect.Reset(args[callbackIndex].As<Function>());
         }
     }
 
@@ -80,7 +81,7 @@ v8::Handle<v8::Value> node_db::Binding::Connect(const v8::Arguments& args) {
         THROW_EXCEPTION("Could not create EIO request")
     }
 
-    request->context = v8::Persistent<v8::Object>::New(args.This());
+    request->context = Persistent(args.This().As<Object>());
     request->binding = binding;
     request->error = NULL;
 
@@ -91,18 +92,14 @@ v8::Handle<v8::Value> node_db::Binding::Connect(const v8::Arguments& args) {
         req->data = request;
         uv_queue_work(uv_default_loop(), req, uvConnect, (uv_after_work_cb)uvConnectFinished);
 
-#if NODE_VERSION_AT_LEAST(0, 7, 9)
 	uv_ref((uv_handle_t *)&g_async);
-#else
-	uv_ref(uv_default_loop());
-#endif
 
     } else {
         connect(request);
         connectFinished(request);
     }
 
-    return scope.Close(v8::Undefined());
+    return scope.Escape(env.Undefined());
 }
 
 void node_db::Binding::connect(connect_request_t* request) {
@@ -114,35 +111,40 @@ void node_db::Binding::connect(connect_request_t* request) {
 }
 
 void node_db::Binding::connectFinished(connect_request_t* request) {
+  Napi::Env env = request->context.Env();
     bool connected = request->binding->connection->isAlive();
-    v8::Local<v8::Value> argv[2];
+    Napi::Value argv[2];
 
     if (connected) {
-        v8::Local<v8::Object> server = v8::Object::New();
-        server->Set(v8::String::New("version"), v8::String::New(request->binding->connection->version().c_str()));
-        server->Set(v8::String::New("hostname"), v8::String::New(request->binding->connection->getHostname().c_str()));
-        server->Set(v8::String::New("user"), v8::String::New(request->binding->connection->getUser().c_str()));
-        server->Set(v8::String::New("database"), v8::String::New(request->binding->connection->getDatabase().c_str()));
+        Napi::Object server = Object::New(env);
+        server.Set(String::New(env, "version"), String::New(env, request->binding->connection->version().c_str()));
+        server.Set(String::New(env, "hostname"), String::New(env, request->binding->connection->getHostname().c_str()));
+        server.Set(String::New(env, "user"), String::New(env, request->binding->connection->getUser().c_str()));
+        server.Set(String::New(env, "database"), String::New(env, request->binding->connection->getDatabase().c_str()));
 
-        argv[0] = v8::Local<v8::Value>::New(v8::Null());
+        argv[0] = env.Null();
         argv[1] = server;
 
         request->binding->Emit("ready", 1, &argv[1]);
     } else {
-        argv[0] = v8::String::New(request->error != NULL ? request->error : "(unknown error)");
+      argv[0] = String::New(env, request->error != NULL ? request->error : "(unknown error)");
 
         request->binding->Emit("error", 1, argv);
     }
 
-    if (request->binding->cbConnect != NULL && !request->binding->cbConnect->IsEmpty()) {
-        v8::TryCatch tryCatch;
-        (*(request->binding->cbConnect))->Call(request->context, connected ? 2 : 1, argv);
-        if (tryCatch.HasCaught()) {
-            node::FatalException(tryCatch);
-        }
+    if (!request->binding->cbConnect.IsEmpty()) {
+      try {
+	if (connected) {
+	  request->binding->cbConnect.Call(request->context.Value(), {argv[0], argv[1]});
+	} else {
+	  request->binding->cbConnect.Call(request->context.Value(), {argv[0]});
+	}
+      } catch (const Napi::Error& e) {
+        e.Fatal("node_db::Binding::connectFinished", "Error connecting");
+      }
     }
 
-    request->context.Dispose();
+    request->context.Reset();
 
     delete request;
 }
@@ -155,102 +157,104 @@ void node_db::Binding::uvConnect(uv_work_t* uvRequest) {
 }
 
 void node_db::Binding::uvConnectFinished(uv_work_t* uvRequest, int status) {
-    v8::HandleScope scope;
-
     connect_request_t* request = static_cast<connect_request_t*>(uvRequest->data);
     assert(request);
 
-#if NODE_VERSION_AT_LEAST(0, 7, 9)
+    Napi::Env env = request->context.Env();
+    HandleScope scope(env);
+
     uv_unref((uv_handle_t *)&g_async);
-#else
-    uv_unref(uv_default_loop());
-#endif
 
     request->binding->Unref();
 
     connectFinished(request);
 }
 
-v8::Handle<v8::Value> node_db::Binding::Disconnect(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::Disconnect(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+    EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
     binding->connection->close();
 
-    return scope.Close(v8::Undefined());
+    return scope.Escape(env.Undefined());
 }
 
-v8::Handle<v8::Value> node_db::Binding::IsConnected(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::IsConnected(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+    EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
-    return scope.Close(binding->connection->isAlive(true) ? v8::True() : v8::False());
+    return scope.Escape(Boolean::New(env, binding->connection->isAlive(true)));
 }
 
-v8::Handle<v8::Value> node_db::Binding::Escape(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::Escape(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+    EscapableHandleScope scope(env);
 
     ARG_CHECK_STRING(0, string);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
     std::string escaped;
 
     try {
-        v8::String::Utf8Value string(args[0]->ToString());
-        std::string unescaped(*string);
+        Napi::String string(env, args[0].ToString());
+        std::string unescaped(string);
         escaped = binding->connection->escape(unescaped);
     } catch(node_db::Exception const& exception) {
         THROW_EXCEPTION(exception.what())
     }
 
-    return scope.Close(v8::String::New(escaped.c_str()));
+    return scope.Escape(String::New(env, escaped.c_str()));
 }
 
-v8::Handle<v8::Value> node_db::Binding::Name(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::Name(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+    EscapableHandleScope scope(env);
 
     ARG_CHECK_STRING(0, table);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
     std::ostringstream escaped;
 
     try {
-        v8::String::Utf8Value string(args[0]->ToString());
-        std::string unescaped(*string);
+        Napi::String string(env, args[0].ToString());
+        std::string unescaped(string);
         escaped << binding->connection->escapeName(unescaped);
     } catch(node_db::Exception const& exception) {
         THROW_EXCEPTION(exception.what())
     }
 
-    return scope.Close(v8::String::New(escaped.str().c_str()));
+    return scope.Escape(String::New(env, escaped.str().c_str()));
 }
 
-v8::Handle<v8::Value> node_db::Binding::Query(const v8::Arguments& args) {
-    v8::HandleScope scope;
+Value node_db::Binding::Query(const CallbackInfo& args) {
+  Napi::Env env = args.Env();
+    EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = node::ObjectWrap::Unwrap<node_db::Binding>(args.This());
+    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
     assert(binding);
 
-    v8::Persistent<v8::Object> query = binding->createQuery();
+    ObjectReference query = binding->createQuery();
     if (query.IsEmpty()) {
         THROW_EXCEPTION("Could not create query");
     }
 
-    node_db::Query* queryInstance = node::ObjectWrap::Unwrap<node_db::Query>(query);
+    node_db::Query* queryInstance = reinterpret_cast<node_db::Query*>(node_db::Query::Unwrap(query.Value()));
     queryInstance->setConnection(binding->connection);
 
-    v8::Handle<v8::Value> set = queryInstance->set(args);
+    Napi::Value set = queryInstance->set(args);
     if (!set.IsEmpty()) {
-        return scope.Close(set);
+        return scope.Escape(set);
     }
 
-    return scope.Close(query);
+    return scope.Escape(query.Value());
 }

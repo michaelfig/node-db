@@ -2,23 +2,20 @@
 #ifndef EVENTS_H_
 #define EVENTS_H_
 
-#include <v8.h>
-#include <node_object_wrap.h>
-#include <node_version.h>
+#include <napi.h>
 #include "./node_defs.h"
 
 namespace node_db {
-class EventEmitter : public node::ObjectWrap {
+  using namespace Napi;
+  class EventEmitter : public ObjectWrap<EventEmitter> {
     public:
         static void Init();
 
     protected:
-#if !NODE_VERSION_AT_LEAST(0, 5, 0)
-        static v8::Persistent<v8::String> syEmit;
-#endif
+        static Reference<String> syEmit;
 
         EventEmitter();
-        bool Emit(const char* event, int argc,  v8::Handle<v8::Value> argv[]);
+        bool Emit(const char* event, int argc, Napi::Value argv[]);
 };
 }
 

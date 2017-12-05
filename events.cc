@@ -31,11 +31,11 @@ bool node_db::EventEmitter::Emit(const char* event, int argc, v8::Handle<v8::Val
 #if NODE_VERSION_AT_LEAST(0, 5, 0)
     node::MakeCallback(this->handle_, "emit", nArgc, nArgv);
 #else
-    v8::Local<v8::Value> emit_v = this->handle_->Get(syEmit);
+    Napi::Value emit_v = this->handle_->Get(syEmit);
     if (!emit_v->IsFunction()) {
         return false;
     }
-    v8::Local<v8::Function> emit = v8::Local<v8::Function>::Cast(emit_v);
+    Napi::Function emit = emit_v.As<Napi::Function>();
 
     v8::TryCatch try_catch;
     emit->Call(this->handle_, nArgc, nArgv);
