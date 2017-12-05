@@ -1,53 +1,31 @@
 // Copyright 2011 Mariano Iglesias <mgiglesias@gmail.com>
 #include "./events.h"
 
-#if !NODE_VERSION_AT_LEAST(0, 5, 0)
-v8::Persistent<v8::String> node_db::EventEmitter::syEmit;
-#endif
-
-node_db::EventEmitter::EventEmitter() : node::ObjectWrap() {
+node_db::EventEmitter::EventEmitter(const CallbackInfo& args) : ObjectWrap<EventEmitter>(args) {
 }
 
 void node_db::EventEmitter::Init() {
-#if !NODE_VERSION_AT_LEAST(0, 5, 0)
-    syEmit = NODE_PERSISTENT_SYMBOL("emit");
-#endif
 }
 
-bool node_db::EventEmitter::Emit(const char* event, int argc, v8::Handle<v8::Value> argv[]) {
-    v8::HandleScope scope;
+bool node_db::EventEmitter::Emit(const char* event, int argc, Napi::Value argv[]) {
+    Napi::Env env = Env();
+    HandleScope scope(env);
 
     int nArgc = argc + 1;
-    v8::Handle<v8::Value>* nArgv = new v8::Handle<v8::Value>[nArgc];
-    if (nArgv == NULL) {
-        return false;
-    }
+    std::vector<napi_value> nArgv(nArgc);
 
-    nArgv[0] = v8::String::New(event);
+    nArgv[0] = String::New(env, event);
     for (int i=0; i < argc; i++) {
         nArgv[i + 1] = argv[i];
     }
 
-#if NODE_VERSION_AT_LEAST(0, 5, 0)
-    node::MakeCallback(this->handle_, "emit", nArgc, nArgv);
-#else
-    Napi::Value emit_v = this->handle_->Get(syEmit);
-    if (!emit_v->IsFunction()) {
+    Napi::Value emit_v = Value().Get("emit");
+    if (!emit_v.IsFunction()) {
         return false;
     }
     Napi::Function emit = emit_v.As<Napi::Function>();
 
-    v8::TryCatch try_catch;
-    emit->Call(this->handle_, nArgc, nArgv);
-#endif
-
-    delete [] nArgv;
-
-#if !NODE_VERSION_AT_LEAST(0, 5, 0)
-    if (try_catch.HasCaught()) {
-        node::FatalException(try_catch);
-    }
-#endif
+    emit.MakeCallback(Value(), nArgv);
 
     return true;
 }

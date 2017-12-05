@@ -3,7 +3,7 @@
 
 using namespace Napi;
 
-node_db::Binding::Binding(): node_db::EventEmitter(), connection(NULL) {
+node_db::Binding::Binding(const CallbackInfo& args): node_db::EventEmitter(args), connection(NULL) {
 }
 
 node_db::Binding::~Binding() {

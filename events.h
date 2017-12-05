@@ -14,7 +14,7 @@ namespace node_db {
     protected:
         static Reference<String> syEmit;
 
-        EventEmitter();
+        EventEmitter(const CallbackInfo& args);
         bool Emit(const char* event, int argc, Napi::Value argv[]);
 };
 }

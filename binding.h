@@ -26,7 +26,7 @@ namespace node_db {
         };
         FunctionReference cbConnect;
 
-        Binding();
+        Binding(const CallbackInfo& args);
         ~Binding();
         static void Init(Object target, Napi::FunctionReference constructorTemplate);
         static Napi::Value Connect(const CallbackInfo& args);
