@@ -11,7 +11,7 @@ template <typename T> T Global(T ref) {
   return ref;
 }
 
-#define NODE_CONSTANT(constant) Integer::New(env, constant)
+#define NODE_CONSTANT(constant) Napi::Number::New(env, constant)
 #define NODE_PERSISTENT_SYMBOL(s) Global(Persistent(Symbol::New(env, s)))
 
 #define NODE_ADD_PROTOTYPE_METHOD(templ, name, callback)                  \
@@ -64,14 +64,14 @@ do {                                                                      \
     }
 
 #define ARG_CHECK_OPTIONAL_UINT32(I, VAR) \
-    if (args.Length() > I && !args[I].IsUint32()) { \
+    if (args.Length() > I && !args[I].IsNumber()) { \
         THROW_EXCEPTION("Argument \"" #VAR "\" must be a valid UINT32") \
     }
 
 #define ARG_CHECK_UINT32(I, VAR) \
     if (args.Length() <= I) { \
         THROW_EXCEPTION("Argument \"" #VAR "\" is mandatory") \
-    } else if (!args[I].IsUint32()) { \
+    } else if (!args[I].IsNumber()) { \
         THROW_EXCEPTION("Argument \"" #VAR "\" must be a valid UINT32") \
     }
 
@@ -129,13 +129,13 @@ do {                                                                      \
   Napi::String KEY##_##key = String::New(env, "" #KEY "");	\
     if (!VAR.Has(KEY##_##key)) { \
         THROW_EXCEPTION("Option \"" #KEY "\" is mandatory") \
-    } else if (!VAR.Get(KEY##_##key).IsUint32()) { \
+    } else if (!VAR.Get(KEY##_##key).IsNumber()) { \
         THROW_EXCEPTION("Option \"" #KEY "\" must be a valid UINT32") \
     }
 
 #define ARG_CHECK_OBJECT_ATTR_OPTIONAL_UINT32(VAR, KEY) \
   Napi::String KEY##_##key = String::New(env, "" #KEY "");	       \
-    if (VAR.Has(KEY##_##key) && !VAR.Get(KEY##_##key).IsUint32()) { \
+    if (VAR.Has(KEY##_##key) && !VAR.Get(KEY##_##key).IsNumber()) { \
         THROW_EXCEPTION("Option \"" #KEY "\" must be a valid UINT32") \
     }
 

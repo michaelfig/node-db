@@ -7,7 +7,6 @@ node_db::Binding::Binding(const CallbackInfo& args): node_db::EventEmitter(args)
 }
 
 node_db::Binding::~Binding() {
-  this->cbConnect.Reset();
 }
 
 uv_async_t node_db::Binding::g_async;

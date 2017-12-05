@@ -17,8 +17,9 @@
 #include "./exception.h"
 #include "./result.h"
 
-namespace node_db {
 using namespace Napi;
+
+namespace node_db {
 class Query : public EventEmitter {
     public:
         static void Init(Object target, Napi::FunctionReference constructorTemplate);
@@ -45,11 +46,11 @@ class Query : public EventEmitter {
         bool async;
         bool cast;
         bool bufferText;
-        FunctionReference* cbStart;
-        FunctionReference* cbExecute;
-        FunctionReference* cbFinish;
+        FunctionReference cbStart;
+        FunctionReference cbExecute;
+        FunctionReference cbFinish;
 
-        Query();
+        Query(const CallbackInfo& args);
         ~Query();
         static Napi::Value Select(const CallbackInfo& args);
         static Napi::Value From(const CallbackInfo& args);
@@ -71,10 +72,10 @@ class Query : public EventEmitter {
         static void uvExecuteFinished(uv_work_t* uvRequest, int status);
         void executeAsync(execute_request_t* request);
         static void freeRequest(execute_request_t* request, bool freeAll = true);
-        std::string fieldName(Napi::Value value) const throw(Exception&);
-        std::string tableName(Napi::Value value, bool escape = true) const throw(Exception&);
-	Napi::Value addCondition(const CallbackInfo& args, const char* separator);
-        Napi::Object row(Result* result, row_t* currentRow) const;
+        std::string fieldName(const Napi::Env& env, Napi::Value value) const throw(Exception&);
+        std::string tableName(const Napi::Env& env, Napi::Value value, bool escape = true) const throw(Exception&);
+        Napi::Value addCondition(const CallbackInfo& args, const char* separator);
+        Napi::Object row(const Napi::Env& env, Result* result, row_t* currentRow) const;
         virtual std::string parseQuery() const throw(Exception&);
         virtual std::vector<std::string::size_type> placeholders(std::string* parsed) const throw(Exception&);
         virtual Result* execute() const throw(Exception&);
