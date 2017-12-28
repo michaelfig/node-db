@@ -7,15 +7,13 @@
 
 namespace node_db {
   using namespace Napi;
-  class EventEmitter : public ObjectWrap<EventEmitter> {
-    public:
-        static void Init();
-
+  class EventEmitter {
     protected:
-        static Reference<String> syEmit;
-
-        EventEmitter(const CallbackInfo& args);
         bool Emit(const char* event, int argc, Napi::Value argv[]);
+
+    public:
+	virtual Napi::Object Value() = 0;
+	virtual Napi::Env Env() = 0;
 };
 }
 

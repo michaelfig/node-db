@@ -1,12 +1,6 @@
 // Copyright 2011 Mariano Iglesias <mgiglesias@gmail.com>
 #include "./events.h"
 
-node_db::EventEmitter::EventEmitter(const CallbackInfo& args) : ObjectWrap<EventEmitter>(args) {
-}
-
-void node_db::EventEmitter::Init() {
-}
-
 bool node_db::EventEmitter::Emit(const char* event, int argc, Napi::Value argv[]) {
     Napi::Env env = Env();
     HandleScope scope(env);

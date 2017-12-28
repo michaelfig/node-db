@@ -3,7 +3,7 @@
 
 using namespace Napi;
 
-node_db::Binding::Binding(const CallbackInfo& args): node_db::EventEmitter(args), connection(NULL) {
+node_db::Binding::Binding(const CallbackInfo& args): connection(NULL) {
 }
 
 node_db::Binding::~Binding() {
@@ -11,31 +11,11 @@ node_db::Binding::~Binding() {
 
 uv_async_t node_db::Binding::g_async;
 
-void node_db::Binding::Init(Object target, FunctionReference constructorTemplate) {
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_STRING, node_db::Result::Column::STRING);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_BOOL, node_db::Result::Column::BOOL);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_INT, node_db::Result::Column::INT);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_BIGINT, node_db::Result::Column::BIGINT);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_NUMBER, node_db::Result::Column::NUMBER);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_DATE, node_db::Result::Column::DATE);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_TIME, node_db::Result::Column::TIME);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_DATETIME, node_db::Result::Column::DATETIME);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_TEXT, node_db::Result::Column::TEXT);
-    NODE_ADD_CONSTANT(constructorTemplate, COLUMN_TYPE_SET, node_db::Result::Column::SET);
-
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "connect", Connect);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "disconnect", Disconnect);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "isConnected", IsConnected);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "escape", Escape);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "name", Name);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "query", Query);
-}
-
 Value node_db::Binding::Connect(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-  node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+  node_db::Binding* binding = this;
     assert(binding);
 
     bool async = true;
@@ -139,7 +119,7 @@ void node_db::Binding::connectFinished(connect_request_t* request) {
 	  request->binding->cbConnect.Call(request->context.Value(), {argv[0]});
 	}
       } catch (const Napi::Error& e) {
-        e.Fatal("node_db::Binding::connectFinished", "Error connecting");
+        e.Fatal("node_db::Binding::connectFinished", e.what());
       }
     }
 
@@ -173,7 +153,7 @@ Value node_db::Binding::Disconnect(const CallbackInfo& args) {
   Napi::Env env = args.Env();
     EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+    node_db::Binding* binding = this;
     assert(binding);
 
     binding->connection->close();
@@ -185,7 +165,7 @@ Value node_db::Binding::IsConnected(const CallbackInfo& args) {
   Napi::Env env = args.Env();
     EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+    node_db::Binding* binding = this;
     assert(binding);
 
     return scope.Escape(Boolean::New(env, binding->connection->isAlive(true)));
@@ -197,7 +177,7 @@ Value node_db::Binding::Escape(const CallbackInfo& args) {
 
     ARG_CHECK_STRING(0, string);
 
-    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+    node_db::Binding* binding = this;
     assert(binding);
 
     std::string escaped;
@@ -219,7 +199,7 @@ Value node_db::Binding::Name(const CallbackInfo& args) {
 
     ARG_CHECK_STRING(0, table);
 
-    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+    node_db::Binding* binding = this;
     assert(binding);
 
     std::ostringstream escaped;
@@ -239,7 +219,7 @@ Value node_db::Binding::Query(const CallbackInfo& args) {
   Napi::Env env = args.Env();
     EscapableHandleScope scope(env);
 
-    node_db::Binding* binding = reinterpret_cast<node_db::Binding*>(Unwrap(args.This().As<Object>()));
+    node_db::Binding* binding = this;
     assert(binding);
 
     ObjectReference query = binding->createQuery();
@@ -247,7 +227,11 @@ Value node_db::Binding::Query(const CallbackInfo& args) {
         THROW_EXCEPTION("Could not create query");
     }
 
-    node_db::Query* queryInstance = reinterpret_cast<node_db::Query*>(node_db::Query::Unwrap(query.Value()));
+    node_db::Query* queryInstance;
+    if (napi_unwrap(query.Env(), query.Value(), reinterpret_cast<void**>(&queryInstance)) != napi_ok) {
+      throw Error::New(query.Env());
+    }
+
     queryInstance->setConnection(binding->connection);
 
     Napi::Value set = queryInstance->set(args);

@@ -367,7 +367,7 @@ exports.get = function(createDbClient, quoteName) {
                 function () {
                     client.query().from();
                 },
-                "Argument \"fields\" is mandatory"
+                "Argument \"tables\" is mandatory"
             );
 
             query = client.query().from("users").sql();

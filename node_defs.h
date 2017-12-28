@@ -6,31 +6,23 @@
 #include <uv.h>
 #include <assert.h>
 
-template <typename T> T Global(T ref) {
+template <typename T> T Eternal(T ref) {
   ref.SuppressDestruct();
   return ref;
 }
 
 #define NODE_CONSTANT(constant) Napi::Number::New(env, constant)
-#define NODE_PERSISTENT_SYMBOL(s) Global(Persistent(Symbol::New(env, s)))
+#define NODE_PERSISTENT_SYMBOL(s) Eternal(Persistent(Symbol::New(env, s)))
 
-#define NODE_ADD_PROTOTYPE_METHOD(templ, name, callback)                  \
-do {                                                                      \
-  Napi::Env env = templ.Env();						\
-  Napi::FunctionReference __callback##_TEM =				\
-    Persistent(Napi::Function::New(env, callback));			\
-    napi_value cproto;							\
-    napi_get_prototype(env, templ.Value(), &cproto);			\
-    Object proto(env, cproto);					  \
-    proto.Set(name, __callback##_TEM);				  \
- } while (0)
+#define NODE_METHOD_PROP(name, callback)		\
+  InstanceMethod(name, &CLASSPFX ## callback)
 
-#define NODE_ADD_CONSTANT(target, name, constant)                         \
-  (target).Value().Set(#name, (double)constant)
+#define NODE_CONSTANT_PROP(name, constant)                         \
+  StaticValue(#name, Napi::Number::New(env, constant))
 
 #ifdef NAPI_CPP_EXCEPTIONS
 # define THROW_EXCEPTION(message, ...)				\
-    Error::New(env, message).ThrowAsJavaScriptException();
+  throw Error::New(env, message);
 #else
 # define THROW_EXCEPTION(message, ...)				\
   do { \

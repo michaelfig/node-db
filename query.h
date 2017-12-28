@@ -22,9 +22,11 @@ using namespace Napi;
 namespace node_db {
 class Query : public EventEmitter {
     public:
-        static void Init(Object target, Napi::FunctionReference constructorTemplate);
         void setConnection(Connection* connection);
 	Napi::Value set(const CallbackInfo& args);
+
+	virtual void Ref() = 0;
+	virtual void Unref() = 0;
 
     protected:
         struct row_t {
@@ -42,7 +44,7 @@ class Query : public EventEmitter {
         };
         Connection* connection;
         std::ostringstream sql;
-        std::vector< Reference<Napi::Value> > values;
+	Reference<Napi::Array> values;
         bool async;
         bool cast;
         bool bufferText;
@@ -52,21 +54,38 @@ class Query : public EventEmitter {
 
         Query(const CallbackInfo& args);
         ~Query();
-        static Napi::Value Select(const CallbackInfo& args);
-        static Napi::Value From(const CallbackInfo& args);
-        static Napi::Value Join(const CallbackInfo& args);
-        static Napi::Value Where(const CallbackInfo& args);
-        static Napi::Value And(const CallbackInfo& args);
-        static Napi::Value Or(const CallbackInfo& args);
-        static Napi::Value Order(const CallbackInfo& args);
-        static Napi::Value Limit(const CallbackInfo& args);
-        static Napi::Value Add(const CallbackInfo& args);
-        static Napi::Value Insert(const CallbackInfo& args);
-        static Napi::Value Update(const CallbackInfo& args);
-        static Napi::Value Set(const CallbackInfo& args);
-        static Napi::Value Delete(const CallbackInfo& args);
-        static Napi::Value Sql(const CallbackInfo& args);
-        static Napi::Value Execute(const CallbackInfo& args);
+
+#define QUERY_PROPS		\
+    XM("select", Select), \
+    XM("from", From), \
+    XM("join", Join), \
+    XM("where", Where), \
+    XM("and", And), \
+    XM("or", Or), \
+    XM("order", Order), \
+    XM("limit", Limit), \
+    XM("add", Add), \
+    XM("insert", Insert), \
+    XM("update", Update), \
+    XM("set", Set), \
+    XM("delete", Delete), \
+    XM("sql", Sql), \
+    XM("execute", Execute)
+        Napi::Value Select(const CallbackInfo& args);
+        Napi::Value From(const CallbackInfo& args);
+        Napi::Value Join(const CallbackInfo& args);
+        Napi::Value Where(const CallbackInfo& args);
+        Napi::Value And(const CallbackInfo& args);
+        Napi::Value Or(const CallbackInfo& args);
+        Napi::Value Order(const CallbackInfo& args);
+        Napi::Value Limit(const CallbackInfo& args);
+        Napi::Value Add(const CallbackInfo& args);
+        Napi::Value Insert(const CallbackInfo& args);
+        Napi::Value Update(const CallbackInfo& args);
+        Napi::Value Set(const CallbackInfo& args);
+        Napi::Value Delete(const CallbackInfo& args);
+        Napi::Value Sql(const CallbackInfo& args);
+        Napi::Value Execute(const CallbackInfo& args);
         static uv_async_t g_async;
         static void uvExecute(uv_work_t* uvRequest);
         static void uvExecuteFinished(uv_work_t* uvRequest, int status);

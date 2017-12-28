@@ -15,32 +15,13 @@ Napi::String v8StringFromUInt64(const Napi::Env &env, uint64_t num, std::ostring
     return String::New(env, reusableStream.str().c_str());
 }
 
-void node_db::Query::Init(Object target, Napi::FunctionReference constructorTemplate) {
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "select", Select);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "from", From);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "join", Join);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "where", Where);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "and", And);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "or", Or);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "order", Order);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "limit", Limit);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "add", Add);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "insert", Insert);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "update", Update);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "set", Set);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "delete", Delete);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "sql", Sql);
-    NODE_ADD_PROTOTYPE_METHOD(constructorTemplate, "execute", Execute);
-}
-
-node_db::Query::Query(const CallbackInfo& args): node_db::EventEmitter(args),
-    connection(NULL), async(true), cast(true), bufferText(false) {
+node_db::Query::Query(const CallbackInfo& args):
+  connection(NULL), async(true), cast(true), bufferText(false) {
+  values.Reset(Array::New(args.Env()), 1);
 }
 
 node_db::Query::~Query() {
-  for (std::vector< Reference<Napi::Value> >::iterator iterator = this->values.begin(), end = this->values.end(); iterator != end; ++iterator) {
-        iterator->Reset();
-    }
+    values.Reset();
 }
 
 void node_db::Query::setConnection(node_db::Connection* connection) {
@@ -63,7 +44,7 @@ Napi::Value node_db::Query::Select(const CallbackInfo& args) {
         ARG_CHECK_STRING(0, fields);
     }
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     query->sql << "SELECT ";
@@ -93,7 +74,7 @@ Napi::Value node_db::Query::Select(const CallbackInfo& args) {
         }
     } else {
         Napi::String fields(env, args[0].ToString());
-        query->sql << fields;
+        query->sql << fields.Utf8Value();
     }
 
     return scope.Escape(args.This());
@@ -117,7 +98,7 @@ Napi::Value node_db::Query::From(const CallbackInfo& args) {
 
     ARG_CHECK_OPTIONAL_BOOL(1, escape);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -151,7 +132,7 @@ Napi::Value node_db::Query::Join(const CallbackInfo& args) {
     ARG_CHECK_OBJECT_ATTR_OPTIONAL_STRING(join, conditions);
     ARG_CHECK_OBJECT_ATTR_OPTIONAL_BOOL(join, escape);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     std::string type = "INNER";
@@ -179,12 +160,12 @@ Napi::Value node_db::Query::Join(const CallbackInfo& args) {
     }
 
     if (join.Has(conditions_key)) {
-        Napi::String conditions(env, join.Get(conditions_key).ToObject());
+        Napi::String conditions(env, join.Get(conditions_key).ToString());
         std::string currentConditions = conditions;
         if (args.Length() > 1) {
             Napi::Array currentValues = args[1].As<Napi::Array>();
             for (uint32_t i = 0, limiti = currentValues.Length(); i < limiti; i++) {
-	      query->values.push_back(Persistent(currentValues.Get(i)));
+	      query->values.Value().Set(query->values.Value().Length(), currentValues.Get(i));
             }
         }
 
@@ -198,7 +179,7 @@ Napi::Value node_db::Query::Where(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+  node_db::Query* query = this;
     assert(query);
 
     return scope.Escape(query->addCondition(args, "WHERE"));
@@ -208,7 +189,7 @@ Napi::Value node_db::Query::And(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+  node_db::Query* query = this;
     assert(query);
 
     return scope.Escape(query->addCondition(args, "AND"));
@@ -218,7 +199,7 @@ Napi::Value node_db::Query::Or(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+  node_db::Query* query = this;
     assert(query);
 
     return scope.Escape(query->addCondition(args, "OR"));
@@ -236,7 +217,7 @@ Napi::Value node_db::Query::Order(const CallbackInfo& args) {
 
     ARG_CHECK_OPTIONAL_BOOL(1, escape);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -294,14 +275,14 @@ Napi::Value node_db::Query::Order(const CallbackInfo& args) {
                 query->sql << (order.ToBoolean() ? "ASC" : "DESC");
             } else if (order.IsString()) {
                 Napi::String currentOrder(env, order.ToString());
-                query->sql << currentOrder;
+                query->sql << currentOrder.Utf8Value();
             } else {
                 THROW_EXCEPTION("Invalid value specified for \"order\" property in order field");
             }
         }
     } else {
         Napi::String sql(env, args[0].ToString());
-        query->sql << sql;
+        query->sql << sql.Utf8Value();
     }
 
     return scope.Escape(args.This());
@@ -318,7 +299,7 @@ Napi::Value node_db::Query::Limit(const CallbackInfo& args) {
         ARG_CHECK_UINT32(0, rows);
     }
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     query->sql << " LIMIT ";
@@ -346,20 +327,22 @@ Napi::Value node_db::Query::Add(const CallbackInfo& args) {
             ARG_CHECK_STRING(0, sql);
         }
 
-        innerQuery = reinterpret_cast<node_db::Query*>(Unwrap(object));
+	if (napi_unwrap(object.Env(), object, reinterpret_cast<void**>(&innerQuery)) != napi_ok) {
+	  throw Error::New(object.Env());
+	}
         assert(innerQuery);
     } else {
         ARG_CHECK_STRING(0, sql);
     }
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     if (innerQuery != NULL) {
         query->sql << innerQuery->sql.str();
     } else {
         Napi::String sql(env, args[0].ToString());
-        query->sql << sql;
+        query->sql << sql.Utf8Value();
     }
 
     return scope.Escape(args.This());
@@ -380,7 +363,7 @@ Napi::Value node_db::Query::Delete(const CallbackInfo& args) {
         ARG_CHECK_OPTIONAL_BOOL(1, escape);
     }
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -435,7 +418,7 @@ Napi::Value node_db::Query::Insert(const CallbackInfo& args) {
         ARG_CHECK_STRING(0, table);
     }
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -466,14 +449,14 @@ Napi::Value node_db::Query::Insert(const CallbackInfo& args) {
                     try {
 		        Napi::String fieldName(env, fields.Get(i));
                         //query->fieldName(env, fields.Get(i));
-		        query->sql << fieldName;
+		        query->sql << fieldName.Utf8Value();
                     } catch(const node_db::Exception& exception) {
                         THROW_EXCEPTION(exception.what())
                     }
                 }
             } else {
                 Napi::String fields(env, args[fieldsIndex].ToString());
-                query->sql << fields;
+                query->sql << fields.Utf8Value();
             }
             query->sql << ")";
         }
@@ -528,7 +511,7 @@ Napi::Value node_db::Query::Update(const CallbackInfo& args) {
 
     ARG_CHECK_OPTIONAL_BOOL(1, escape);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -554,7 +537,7 @@ Napi::Value node_db::Query::Set(const CallbackInfo& args) {
     ARG_CHECK_OBJECT(0, values);
     ARG_CHECK_OPTIONAL_BOOL(1, escape);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+    node_db::Query* query = this;
     assert(query);
 
     bool escape = true;
@@ -591,7 +574,7 @@ Napi::Value node_db::Query::Sql(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+  node_db::Query* query = this;
     assert(query);
 
     return scope.Escape(String::New(env, query->sql.str().c_str()));
@@ -601,7 +584,7 @@ Napi::Value node_db::Query::Execute(const CallbackInfo& args) {
   Napi::Env env = args.Env();
   EscapableHandleScope scope(env);
 
-    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(args.This().As<Object>()));
+  node_db::Query* query = this;
     assert(query);
 
     if (args.Length() > 0) {
@@ -627,7 +610,7 @@ Napi::Value node_db::Query::Execute(const CallbackInfo& args) {
 	try {
 	  result = query->cbStart.Call(env.Global(), {argv[0]});
 	} catch (const Napi::Error& e) {
-	  e.Fatal("node_db::Query::Execute", "Error in start callback");
+	  e.Fatal("node_db::Query::Execute", e.what());
 	}
 
         if (!result.IsUndefined()) {
@@ -752,7 +735,7 @@ void node_db::Query::uvExecuteFinished(uv_work_t* uvRequest, int status) {
     assert(request);
 
     Napi::Env env = request->context.Env();
-    EscapableHandleScope scope(env);
+    HandleScope scope(env);
 
     if (request->error == NULL && request->result != NULL) {
         Napi::Value argv[3];
@@ -813,7 +796,7 @@ void node_db::Query::uvExecuteFinished(uv_work_t* uvRequest, int status) {
 	      request->query->cbExecute.Call(request->context.Value(), {argv[0], argv[1], argv[2]});
 	    }
 	  } catch (const Napi::Error& e) {
-	    e.Fatal("node_db::Query::uvExecuteFinished", "Error in execute callback");
+	    e.Fatal("node_db::Query::uvExecuteFinished", e.what());
 	  }
         }
     } else {
@@ -826,7 +809,7 @@ void node_db::Query::uvExecuteFinished(uv_work_t* uvRequest, int status) {
 	  try {
             request->query->cbExecute.Call(request->context.Value(), {argv[0]});
 	  } catch (const Napi::Error& e) {
-	    e.Fatal("node_db::Query::uvExecuteFinished", "Error in execute callback");
+	    e.Fatal("node_db::Query::uvExecuteFinished", e.what());
 	  }
 	}
     }
@@ -941,7 +924,7 @@ void node_db::Query::executeAsync(execute_request_t* request) {
 	  try {
 	    this->cbExecute.Call(request->context.Value(), {argv[0]});
 	  } catch (const Napi::Error& e) {
-	    e.Fatal("node_db::Query::executeAsync", "Error in execute callback");
+	    e.Fatal("node_db::Query::executeAsync", e.what());
 	  }
         }
 
@@ -1066,7 +1049,7 @@ Napi::Value node_db::Query::set(const CallbackInfo& args) {
         Napi::String initialSql(env, args[queryIndex].ToString());
         this->sql.str("");
         this->sql.clear();
-        this->sql << initialSql;
+        this->sql << initialSql.Utf8Value();
     }
 
     if (optionsIndex >= 0) {
@@ -1102,7 +1085,7 @@ Napi::Value node_db::Query::set(const CallbackInfo& args) {
     if (valuesIndex >= 0) {
         Napi::Array values = args[valuesIndex].As<Napi::Array>();
         for (uint32_t i = 0, limiti = values.Length(); i < limiti; i++) {
-	  this->values.push_back(Persistent(values.Get(i)));
+	  this->values.Value().Set(this->values.Value().Length(), values.Get(i));
         }
     }
 
@@ -1128,7 +1111,7 @@ std::string node_db::Query::fieldName(const Napi::Env& env, Napi::Value value) c
             Napi::String fieldName(env, propertyName);
 
             Napi::Value currentValue = valueObject.Get(propertyName);
-            if (currentValue.IsObject() && !currentValue.IsArray() && !currentValue.IsFunction()) {
+            if (currentValue.IsObject() && !currentValue.IsArray() && !currentValue.IsFunction() && !currentValue.ToObject().InstanceOf(env.Global().Get("Date").As<Napi::Function>())) {
                 Napi::Object currentObject = currentValue.ToObject();
                 Napi::String escapeKey = String::New(env, "escape");
                 Napi::String valueKey = String::New(env, "value");
@@ -1239,7 +1222,7 @@ Napi::Value node_db::Query::addCondition(const CallbackInfo& args, const char* s
     if (args.Length() > 1) {
         Napi::Array currentValues = args[1].As<Napi::Array>();
         for (uint32_t i = 0, limiti = currentValues.Length(); i < limiti; i++) {
-	  this->values.push_back(Persistent(currentValues.Get(i)));
+	  this->values.Value().Set(this->values.Value().Length(), currentValues.Get(i));
         }
     }
 
@@ -1400,7 +1383,7 @@ std::vector<std::string::size_type> node_db::Query::placeholders(std::string* pa
         }
     }
 
-    if (positions.size() != this->values.size()) {
+    if (positions.size() != this->values.Value().Length()) {
         throw node_db::Exception("Wrong number of values to escape");
     }
 
@@ -1413,7 +1396,7 @@ std::string node_db::Query::parseQuery() const throw(node_db::Exception&) {
 
     uint32_t index = 0, delta = 0;
     for (std::vector<std::string::size_type>::iterator iterator = positions.begin(), end = positions.end(); iterator != end; ++iterator, index++) {
-      std::string value = this->value(this->values[index].Value());
+      std::string value = this->value(this->values.Value()[index]);
 
 	if(!value.length()) {
 		throw node_db::Exception("Internal error, attempting to replace with zero length value");
@@ -1485,7 +1468,10 @@ std::string node_db::Query::value(Napi::Value value, bool inArray, bool escape, 
                 throw node_db::Exception("Objects can't be converted to a SQL value");
             }
 
-	    node_db::Query* query = reinterpret_cast<node_db::Query*>(Unwrap(object));
+	    node_db::Query* query;
+	    if (napi_unwrap(object.Env(), object, reinterpret_cast<void**>(&query)) != napi_ok) {
+	      throw Error::New(object.Env());
+	    }
             assert(query);
             if (escape) {
                 currentStream << "(";
@@ -1503,7 +1489,7 @@ std::string node_db::Query::value(Napi::Value value, bool inArray, bool escape, 
     } else if (value.IsNumber()) {
         if (precision == -1) {
             Napi::String currentString(env, value.ToString());
-            currentStream << currentString;
+            currentStream << currentString.Utf8Value();
         } else {
             currentStream << std::fixed << std::setprecision(precision) << value.As<Napi::Number>().DoubleValue();
         }
